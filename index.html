@@ -246,9 +246,19 @@
         const GITHUB_CONFIG = {
             owner: 'CptKiffKopf',                 // GitHub Username aus dem Link
             repo: 'xsd42-42445-231',              // Repository Name aus dem Link
-            token: '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', // Dein Personal Access Token
+            token: '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', // Dein Personal Access Token
             dataFile: 'data/finanzplaner.json'   // Pfad zur Datendatei im Repository
         };
+
+        // WICHTIG: Token Berechtigung für 401 Fehler
+        // Für ÖFFENTLICHE GitHub Pages Projekte brauchst du:
+        // ✅ "public_repo" - Access public repositories
+        // 
+        // So erstellst du einen neuen Token:
+        // 1. GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)
+        // 2. Generate new token (classic)
+        // 3. Wähle "public_repo" Berechtigung aus (NICHT "repo"!)
+        // 4. Token kopieren und oben einfügen
 
         let backendConnected = true;
 
@@ -767,5 +777,5 @@
             setInterval(checkAutoSync, 24 * 60 * 60 * 1000);
         });
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9749ef1b86b93f0f',t:'MTc1NjExMjc5My4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9749f91652433f0f',t:'MTc1NjExMzIwMS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
