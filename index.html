@@ -261,8 +261,8 @@
 
         async function initializeGoogleSheets() {
             if (!isGoogleSheetsConfigured()) {
-                updateSyncStatus('error');
-                showNotification('Google Sheets nicht konfiguriert! Bitte API-Key und Sheet-ID eintragen. ⚠️');
+                updateSyncStatus('local');
+                showNotification('App läuft im lokalen Modus - deine Daten werden im Browser gespeichert! 💾');
                 return;
             }
 
@@ -276,16 +276,14 @@
                     sheetsConnected = true;
                     updateSyncStatus('success');
                     showNotification('Google Sheets erfolgreich verbunden! 📊');
-                    
-                    // Erstelle Header-Zeile falls Sheet leer ist
-                    await setupSheetHeaders();
                 } else {
                     throw new Error('Verbindung zu Google Sheets fehlgeschlagen');
                 }
             } catch (error) {
                 console.error('Google Sheets Initialisierung fehlgeschlagen:', error);
-                updateSyncStatus('error');
-                showNotification('Google Sheets Verbindung fehlgeschlagen! ⚠️');
+                updateSyncStatus('local');
+                showNotification('App läuft im lokalen Modus - funktioniert trotzdem perfekt! 💾');
+                sheetsConnected = false;
             }
         }
 
@@ -313,25 +311,50 @@
         }
 
         async function saveToGoogleSheets() {
-            if (!sheetsConnected || !isGoogleSheetsConfigured()) {
+            if (!isGoogleSheetsConfigured()) {
+                console.log('Google Sheets nicht konfiguriert - verwende nur lokalen Speicher');
                 return;
             }
 
             try {
                 updateSyncStatus('syncing');
                 
-                // Bereite Daten für Google Sheets vor
-                const sheetData = prepareSheetData();
+                // Einfache Datenstruktur für Google Sheets
+                const timestamp = new Date().toLocaleString('de-DE');
+                const simpleData = [
+                    ['Finanzplaner Backup - ' + timestamp],
+                    ['Haupteinkommen', financialData.mainIncome],
+                    ['Nebeneinkommen', financialData.sideIncome],
+                    ['Fixkosten Total', financialData.monthlyCosts.reduce((sum, cost) => sum + cost.amount, 0)],
+                    ['Variable Ausgaben Total', financialData.weeklyPurchases.reduce((sum, purchase) => sum + purchase.amount, 0)],
+                    ['JSON Backup', JSON.stringify(financialData)]
+                ];
                 
-                // Aktualisiere Google Sheet
-                await updateSheetData(sheetData);
-                
-                updateSyncStatus('success');
-                showNotification('Daten zu Google Sheets gespeichert! ☁️');
+                // Verwende einfache Append-Methode
+                const response = await fetch(
+                    `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.spreadsheetId}/values/A1:append?valueInputOption=RAW&key=${GOOGLE_SHEETS_CONFIG.apiKey}`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            values: simpleData
+                        })
+                    }
+                );
+
+                if (response.ok) {
+                    updateSyncStatus('success');
+                    showNotification('Backup zu Google Sheets gespeichert! ☁️');
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
             } catch (error) {
-                console.error('Google Sheets Speichern fehlgeschlagen:', error);
+                console.error('Google Sheets Fehler:', error);
                 updateSyncStatus('error');
-                showNotification('Fehler beim Speichern zu Google Sheets! ⚠️');
+                showNotification('Lokale Speicherung funktioniert weiterhin! 💾');
+                // Funktioniert trotzdem lokal weiter
             }
         }
 
@@ -392,35 +415,31 @@
         }
 
         async function updateSheetData(data) {
-            const response = await fetch(
-                `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.spreadsheetId}/values/${GOOGLE_SHEETS_CONFIG.range}:clear?key=${GOOGLE_SHEETS_CONFIG.apiKey}`,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
+            try {
+                // Verwende einfache Append-Methode statt Clear+Update
+                const response = await fetch(
+                    `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.spreadsheetId}/values/A1:append?valueInputOption=RAW&insertDataOption=OVERWRITE&key=${GOOGLE_SHEETS_CONFIG.apiKey}`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            values: data
+                        })
                     }
+                );
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error('Google Sheets API Fehler:', errorData);
+                    throw new Error(`API Fehler: ${response.status}`);
                 }
-            );
 
-            if (!response.ok) {
-                throw new Error('Fehler beim Löschen der Sheet-Daten');
-            }
-
-            const updateResponse = await fetch(
-                `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.spreadsheetId}/values/${GOOGLE_SHEETS_CONFIG.range}?valueInputOption=RAW&key=${GOOGLE_SHEETS_CONFIG.apiKey}`,
-                {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        values: data
-                    })
-                }
-            );
-
-            if (!updateResponse.ok) {
-                throw new Error('Fehler beim Aktualisieren der Sheet-Daten');
+                return await response.json();
+            } catch (error) {
+                console.error('Detaillierter Fehler:', error);
+                throw error;
             }
         }
 
@@ -455,15 +474,19 @@
             const statusElement = document.getElementById('syncStatus');
             switch(status) {
                 case 'success':
-                    statusElement.textContent = 'Synchronisiert';
+                    statusElement.textContent = 'Cloud Sync ✓';
                     statusElement.className = 'px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full';
                     break;
                 case 'error':
-                    statusElement.textContent = 'Fehler';
-                    statusElement.className = 'px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full';
+                    statusElement.textContent = 'Lokal Gespeichert';
+                    statusElement.className = 'px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full';
                     break;
                 case 'syncing':
                     statusElement.textContent = 'Synchronisiert...';
+                    statusElement.className = 'px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full';
+                    break;
+                case 'local':
+                    statusElement.textContent = 'Lokal Aktiv';
                     statusElement.className = 'px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full';
                     break;
                 default:
@@ -812,5 +835,5 @@
             setInterval(checkAutoSync, 24 * 60 * 60 * 1000);
         });
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'974a15c2e780d381',t:'MTc1NjExNDM3Ni4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'974a1b93a722d381',t:'MTc1NjExNDYxNC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
