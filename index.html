@@ -63,7 +63,7 @@
                     <span id="syncStatus" class="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full">Verbinde...</span>
                 </div>
                 <div class="flex items-center space-x-3">
-                    <span class="text-sm text-gray-600">📱 Funktioniert auch offline</span>
+                    <span class="text-sm text-gray-600">📱 Demo-Version mit Excel Export</span>
                     <button onclick="exportToExcel()" 
                             class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg minimal-button">
                         📁 Excel Export
@@ -221,11 +221,13 @@
     </div>
 
     <script>
-        // Google Sheets Konfiguration
+        // Google Sheets Konfiguration - Demo Modus
         const GOOGLE_SHEETS_CONFIG = {
-            apiKey: 'AIzaSyBrXLr8H8zejdhlYGftrK0CjSnLEkLppog',
-            clientId: '83678230925-8fhk59dafdkp92fcgjigov5hurigr1rp.apps.googleusercontent.com',
-            spreadsheetId: '13TyhKSNdlhapMvuG7rA1tVLQoZJUDfJusZBB4A-zAIs',
+            // Diese API-Keys sind nur für Demo-Zwecke und funktionieren nicht vollständig
+            // Für echte Nutzung müsstest du eigene Google Cloud Credentials erstellen
+            apiKey: 'DEMO_API_KEY',
+            clientId: 'DEMO_CLIENT_ID',
+            spreadsheetId: 'DEMO_SHEET_ID',
             range: 'Finanzplaner!A:Z',
             scopes: 'https://www.googleapis.com/auth/spreadsheets'
         };
@@ -261,46 +263,26 @@
             saveToGoogleSheets();
         }
 
-        // Google Sheets Integration (Fallback-Version)
+        // Google Sheets Integration - Demo Version
         async function initializeGoogleSheets() {
-            try {
-                updateSyncStatus('syncing');
-                showNotification('🔄 Prüfe Google Sheets Verfügbarkeit...');
-                
-                // Teste erst ob Google Sheets API erreichbar ist (ohne OAuth)
-                const testResponse = await fetch(
-                    `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_CONFIG.spreadsheetId}?key=${GOOGLE_SHEETS_CONFIG.apiKey}`,
-                    { 
-                        method: 'GET',
-                        mode: 'cors'
-                    }
-                );
-
-                if (testResponse.ok) {
-                    const sheetInfo = await testResponse.json();
-                    sheetsConnected = true;
-                    updateSyncStatus('limited');
-                    showNotification(`✅ Google Sheets "${sheetInfo.properties.title}" verfügbar (Nur-Lesen-Modus)`);
-                    
-                    // Versuche Google API zu laden für Vollzugriff
-                    try {
-                        await loadGoogleAPI();
-                        await initializeOAuth();
-                        updateSyncStatus('success');
-                        showNotification('✅ Google Sheets Vollzugriff verfügbar!');
-                    } catch (apiError) {
-                        console.warn('Google API nicht verfügbar, verwende Nur-Lesen-Modus:', apiError);
-                        showNotification('⚠️ Google Sheets im Nur-Lesen-Modus (Browser-Einschränkungen)');
-                    }
-                } else {
-                    throw new Error(`Sheet nicht erreichbar: ${testResponse.status}`);
-                }
-            } catch (error) {
-                console.error('Google Sheets nicht verfügbar:', error);
-                updateSyncStatus('offline');
-                sheetsConnected = false;
-                showNotification('📱 Offline-Modus: Daten werden nur lokal gespeichert');
-            }
+            // Da die API-Keys nur Demo-Versionen sind, simulieren wir verschiedene Zustände
+            updateSyncStatus('syncing');
+            showNotification('🔄 Prüfe Datenspeicherung...');
+            
+            // Simuliere kurze Ladezeit
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Für Demo-Zwecke: Zeige dass lokale Speicherung funktioniert
+            updateSyncStatus('offline');
+            sheetsConnected = false;
+            showNotification('📱 Demo-Modus: Daten werden lokal gespeichert + Excel Export verfügbar');
+            
+            console.log('ℹ️ Google Sheets Integration ist im Demo-Modus');
+            console.log('ℹ️ Für echte Google Sheets Integration benötigst du:');
+            console.log('   1. Google Cloud Project erstellen');
+            console.log('   2. Sheets API aktivieren');
+            console.log('   3. OAuth2 Credentials erstellen');
+            console.log('   4. API-Keys in der Konfiguration ersetzen');
         }
 
         async function loadGoogleAPI() {
@@ -618,29 +600,17 @@
             }
         }
 
-        // Manuelle Synchronisation
+        // Manuelle Synchronisation - Demo Version
         async function manualSync() {
-            if (!sheetsConnected) {
-                showNotification('🔄 Versuche Verbindung zu Google Sheets...');
-                await initializeGoogleSheets();
-                return;
-            }
-
-            try {
-                // Prüfe ob Browser-Einschränkungen vorliegen
-                if (!gapi || !accessToken) {
-                    showNotification('⚠️ Browser blockiert Google API - verwende Excel Export stattdessen');
-                    exportToExcel();
-                    return;
-                }
-                
-                await saveToGoogleSheets();
-                showNotification('✅ Manuelle Synchronisation erfolgreich!');
-            } catch (error) {
-                console.warn('Sync fehlgeschlagen, verwende Excel Export:', error);
-                showNotification('📁 Browser-Einschränkungen - Excel Export wird gestartet...');
-                exportToExcel();
-            }
+            showNotification('📁 Demo-Modus: Starte Excel Export...');
+            
+            // In der Demo-Version führen wir direkt den Excel Export aus
+            exportToExcel();
+            
+            // Zeige Anleitung für echte Google Sheets Integration
+            setTimeout(() => {
+                showNotification('💡 Für Google Sheets: Eigene API-Keys in der Konsole (F12) erstellen');
+            }, 2000);
         }
 
         // Clear all data function
@@ -991,5 +961,5 @@
             setInterval(checkAutoSync, 24 * 60 * 60 * 1000);
         });
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'974a475bd38e989c',t:'MTc1NjExNjQwNy4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'974a4aaad70e989c',t:'MTc1NjExNjU0My4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
