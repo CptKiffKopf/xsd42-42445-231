@@ -304,65 +304,60 @@
             });
         }
 
-        // Manuelle Synchronisation - Direkte Google Sheets API
+        // Manuelle Synchronisation - Funktionierender Google OAuth Flow
         async function manualSync() {
             try {
                 updateSyncStatus('syncing');
                 showNotification('🔄 Starte Google Sheets Synchronisation...');
                 
-                // Direkte Authentifizierung über Google OAuth
-                const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-                    `client_id=${GOOGLE_SHEETS_CONFIG.clientId}&` +
-                    `redirect_uri=${encodeURIComponent('https://developers.google.com/oauthplayground')}&` +
-                    `response_type=code&` +
-                    `scope=${encodeURIComponent(GOOGLE_SHEETS_CONFIG.scopes)}&` +
-                    `access_type=offline&` +
-                    `prompt=consent`;
+                // Lade Google API falls noch nicht geladen
+                await loadGoogleAPI();
                 
-                showNotification('🚀 Öffne Google Login...');
+                showNotification('🔐 Starte Google Authentifizierung...');
                 
-                // Popup mit optimalen Einstellungen
-                const popup = window.open(
-                    authUrl,
-                    'googleAuth',
-                    'width=500,height=600,scrollbars=yes,resizable=yes'
-                );
+                // Verwende Google API für Authentifizierung
+                const authInstance = gapi.auth2.getAuthInstance();
                 
-                if (!popup) {
-                    throw new Error('Popup blockiert');
-                }
-                
-                showNotification('🔐 Bitte melde dich bei Google an und kopiere den Code...');
-                
-                // Warte auf Popup-Schließung und frage nach Code
-                const checkClosed = setInterval(() => {
-                    if (popup.closed) {
-                        clearInterval(checkClosed);
+                if (!authInstance.isSignedIn.get()) {
+                    showNotification('📝 Öffne Google Login...');
+                    
+                    try {
+                        const user = await authInstance.signIn({
+                            scope: GOOGLE_SHEETS_CONFIG.scopes
+                        });
                         
-                        // Frage nach dem Authorization Code
-                        setTimeout(() => {
-                            const authCode = prompt('Bitte füge den Authorization Code aus dem Google OAuth Playground hier ein:');
-                            if (authCode) {
-                                exchangeCodeForToken(authCode);
-                            } else {
-                                updateSyncStatus('error');
-                                showNotification('❌ Kein Code eingegeben - verwende Excel Export');
-                                exportToExcel();
-                            }
-                        }, 1000);
+                        showNotification('✅ Erfolgreich angemeldet!');
+                        
+                        const accessToken = user.getAuthResponse().access_token;
+                        console.log('🔑 Access Token erhalten:', !!accessToken);
+                        
+                        // Schreibe zu Google Sheets
+                        await writeToGoogleSheetsWithToken(accessToken);
+                        
+                        updateSyncStatus('success');
+                        showNotification('✅ Daten erfolgreich zu Google Sheets gespeichert!');
+                        
+                    } catch (signInError) {
+                        console.error('❌ Google Sign-In Fehler:', signInError);
+                        
+                        if (signInError.error === 'popup_blocked_by_browser') {
+                            showNotification('🚫 Popup blockiert - verwende manuelle Methode...');
+                            await manualAuthFlow();
+                        } else {
+                            throw signInError;
+                        }
                     }
-                }, 1000);
-                
-                // Timeout nach 5 Minuten
-                setTimeout(() => {
-                    clearInterval(checkClosed);
-                    if (!popup.closed) {
-                        popup.close();
-                        updateSyncStatus('error');
-                        showNotification('⏰ Login Timeout - verwende Excel Export');
-                        exportToExcel();
-                    }
-                }, 300000);
+                } else {
+                    // Bereits angemeldet
+                    const user = authInstance.currentUser.get();
+                    const accessToken = user.getAuthResponse().access_token;
+                    
+                    showNotification('✅ Bereits angemeldet - schreibe Daten...');
+                    await writeToGoogleSheetsWithToken(accessToken);
+                    
+                    updateSyncStatus('success');
+                    showNotification('✅ Daten erfolgreich zu Google Sheets gespeichert!');
+                }
                 
             } catch (error) {
                 console.error('❌ Sync Fehler:', error);
@@ -372,16 +367,93 @@
             }
         }
         
+        // Manuelle Authentifizierung als Fallback
+        async function manualAuthFlow() {
+            try {
+                showNotification('🔄 Verwende manuelle Authentifizierung...');
+                
+                // Verwende korrekte Redirect URI für OAuth Playground
+                const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+                    `client_id=${GOOGLE_SHEETS_CONFIG.clientId}&` +
+                    `redirect_uri=https%3A//developers.google.com/oauthplayground&` +
+                    `response_type=code&` +
+                    `scope=${encodeURIComponent(GOOGLE_SHEETS_CONFIG.scopes)}&` +
+                    `access_type=offline&` +
+                    `prompt=consent&` +
+                    `state=manual_auth`;
+                
+                showNotification('🌐 Öffne OAuth Playground...');
+                
+                // Öffne OAuth Playground in neuem Tab
+                const authTab = window.open(authUrl, '_blank');
+                
+                if (!authTab) {
+                    throw new Error('Tab blockiert');
+                }
+                
+                showNotification('📋 Kopiere den Authorization Code und füge ihn hier ein...');
+                
+                // Warte auf Benutzereingabe
+                setTimeout(() => {
+                    const authCode = prompt(
+                        'Schritte:\n' +
+                        '1. Melde dich bei Google an\n' +
+                        '2. Erlaube den Zugriff auf Google Sheets\n' +
+                        '3. Kopiere den "Authorization Code"\n' +
+                        '4. Füge ihn hier ein:\n\n' +
+                        'Authorization Code:'
+                    );
+                    
+                    if (authCode && authCode.trim()) {
+                        exchangeCodeForToken(authCode.trim());
+                    } else {
+                        updateSyncStatus('error');
+                        showNotification('❌ Kein Code eingegeben - verwende Excel Export');
+                        exportToExcel();
+                    }
+                }, 3000);
+                
+            } catch (error) {
+                console.error('❌ Manuelle Auth Fehler:', error);
+                updateSyncStatus('error');
+                showNotification('❌ Authentifizierung fehlgeschlagen - verwende Excel Export');
+                exportToExcel();
+            }
+        }
+        
         // Authorization Code gegen Access Token tauschen
         async function exchangeCodeForToken(authCode) {
             try {
                 showNotification('🔄 Tausche Code gegen Access Token...');
                 
-                // Simuliere erfolgreichen Token-Austausch und schreibe direkt
+                // Verwende Google OAuth Token Endpoint
+                const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        client_id: GOOGLE_SHEETS_CONFIG.clientId,
+                        client_secret: '', // Für öffentliche Clients leer lassen
+                        code: authCode,
+                        grant_type: 'authorization_code',
+                        redirect_uri: 'https://developers.google.com/oauthplayground'
+                    })
+                });
+                
+                if (!tokenResponse.ok) {
+                    const errorData = await tokenResponse.json();
+                    console.error('❌ Token Exchange Fehler:', errorData);
+                    throw new Error(`Token Exchange fehlgeschlagen: ${errorData.error_description || tokenResponse.status}`);
+                }
+                
+                const tokenData = await tokenResponse.json();
+                console.log('✅ Access Token erhalten:', !!tokenData.access_token);
+                
                 showNotification('✅ Token erhalten! Schreibe Daten zu Google Sheets...');
                 
-                // Verwende die Google Sheets API direkt
-                await writeToGoogleSheetsDirectly();
+                // Verwende den echten Access Token
+                await writeToGoogleSheetsWithToken(tokenData.access_token);
                 
                 updateSyncStatus('success');
                 showNotification('✅ Daten erfolgreich zu Google Sheets gespeichert!');
@@ -897,5 +969,5 @@
             setInterval(checkAutoSync, 24 * 60 * 60 * 1000);
         });
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'974aef0fa6aadb9f',t:'MTc1NjEyMzI3Ni4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'974af1a4267bdb9f',t:'MTc1NjEyMzM4Mi4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
